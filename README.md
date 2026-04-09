@@ -99,6 +99,25 @@
 
 ---
 
+## ⚠️ macOS: "Transkrip is damaged and can't be opened"
+
+The DMG is distributed **unsigned** (no Apple Developer ID), so macOS Gatekeeper will quarantine it. This is expected — the app is **not** actually damaged.
+
+**Fix** — after dragging `Transkrip.app` to `/Applications`, run this once in Terminal:
+
+```bash
+xattr -cr /Applications/Transkrip.app
+```
+
+Then open the app normally. Done. ✅
+
+> 💡 Alternatively, you can clear the quarantine flag directly on the DMG before installing:
+> ```bash
+> xattr -cr ~/Downloads/Transkrip-1.0.0-arm64.dmg
+> ```
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
