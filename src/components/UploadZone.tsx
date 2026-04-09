@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { Transcription, TranscriptionProgress } from '../types';
 
 const LANGUAGES = [
@@ -38,9 +38,37 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
   const [timestamps, setTimestamps] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [modelStatus, setModelStatus] = useState<Record<string, boolean>>({});
 
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
   const isProcessing = progress.status === 'transcribing' || progress.status === 'downloading-model';
+
+  const refreshModelStatus = useCallback(async () => {
+    if (!isElectron) return;
+    const entries = await Promise.all(
+      MODELS.map(async (m) => [m.id, await window.electronAPI.checkModel(m.id)] as const)
+    );
+    setModelStatus(Object.fromEntries(entries));
+  }, [isElectron]);
+
+  useEffect(() => {
+    refreshModelStatus();
+  }, [refreshModelStatus]);
+
+  useEffect(() => {
+    // Refresh after a successful download/transcription
+    if (progress.status === 'done') refreshModelStatus();
+  }, [progress.status, refreshModelStatus]);
+
+  const handleDownloadModel = async (modelId: string) => {
+    if (!isElectron) return;
+    setError(null);
+    const result = await window.electronAPI.downloadModel(modelId);
+    if (!result.success) {
+      setError(result.error || `Failed to download ${modelId} model`);
+    }
+    await refreshModelStatus();
+  };
 
   const handleSelectFile = async () => {
     if (!isElectron) return;
@@ -188,10 +216,41 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
             disabled={isProcessing}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label} ({m.size}) - {m.desc}</option>
-            ))}
+            {MODELS.map((m) => {
+              const downloaded = modelStatus[m.id];
+              const badge = downloaded === undefined ? '…' : downloaded ? '✓ Downloaded' : '⬇ Not downloaded';
+              return (
+                <option key={m.id} value={m.id}>
+                  {m.label} ({m.size}) — {badge}
+                </option>
+              );
+            })}
           </select>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            {modelStatus[model] === true ? (
+              <span className="text-emerald-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Model ready on your device
+              </span>
+            ) : modelStatus[model] === false ? (
+              <>
+                <span className="text-amber-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  Not downloaded yet
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadModel(model)}
+                  disabled={isProcessing}
+                  className="text-indigo-400 hover:text-indigo-300 underline disabled:opacity-50"
+                >
+                  Download now
+                </button>
+              </>
+            ) : (
+              <span className="text-slate-500">Checking…</span>
+            )}
+          </div>
         </div>
       </div>
 
