@@ -27,6 +27,7 @@ export default function App() {
 
   useEffect(() => {
     loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -39,7 +40,8 @@ export default function App() {
       });
     });
     return unsub;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isElectron]);
 
   const handleTranscriptionComplete = async (transcription: Transcription) => {
     setActiveTranscription(transcription);

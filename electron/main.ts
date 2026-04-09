@@ -48,7 +48,7 @@ ipcMain.handle('select-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [
-      { name: 'Audio/Video', extensions: ['mp3', 'mp4', 'wav', 'ogg', 'm4a', 'webm', 'flac', 'aac'] },
+      { name: 'Audio/Video', extensions: ['mp3', 'mp4', 'wav', 'ogg', 'm4a', 'webm', 'flac', 'aac', 'mov', 'mkv', 'avi', 'wmv', 'opus', 'wma'] },
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
@@ -111,51 +111,73 @@ ipcMain.handle('download-model', async (_event, modelName: string) => {
 
 // Database IPC
 ipcMain.handle('db-save-transcription', async (_event, record: any) => {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO transcriptions (id, filename, filepath, language, model, duration, text, segments, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  stmt.run(
-    record.id,
-    record.filename,
-    record.filepath,
-    record.language,
-    record.model,
-    record.duration || 0,
-    record.text,
-    JSON.stringify(record.segments || []),
-    record.created_at || new Date().toISOString()
-  );
-  return { success: true };
+  try {
+    const db = getDb();
+    const stmt = db.prepare(`
+      INSERT INTO transcriptions (id, filename, filepath, language, model, duration, text, segments, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      record.id,
+      record.filename,
+      record.filepath,
+      record.language,
+      record.model,
+      record.duration || 0,
+      record.text,
+      JSON.stringify(record.segments || []),
+      record.created_at || new Date().toISOString()
+    );
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('db-get-transcriptions', async () => {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM transcriptions ORDER BY created_at DESC').all();
-  return rows.map((row: any) => ({
-    ...row,
-    segments: JSON.parse(row.segments || '[]'),
-  }));
+  try {
+    const db = getDb();
+    const rows = db.prepare('SELECT * FROM transcriptions ORDER BY created_at DESC').all();
+    return rows.map((row: any) => ({
+      ...row,
+      segments: JSON.parse(row.segments || '[]'),
+    }));
+  } catch (error: any) {
+    console.error('db-get-transcriptions failed:', error);
+    return [];
+  }
 });
 
 ipcMain.handle('db-get-transcription', async (_event, id: string) => {
-  const db = getDb();
-  const row: any = db.prepare('SELECT * FROM transcriptions WHERE id = ?').get(id);
-  if (!row) return null;
-  return { ...row, segments: JSON.parse(row.segments || '[]') };
+  try {
+    const db = getDb();
+    const row: any = db.prepare('SELECT * FROM transcriptions WHERE id = ?').get(id);
+    if (!row) return null;
+    return { ...row, segments: JSON.parse(row.segments || '[]') };
+  } catch (error: any) {
+    console.error('db-get-transcription failed:', error);
+    return null;
+  }
 });
 
 ipcMain.handle('db-delete-transcription', async (_event, id: string) => {
-  const db = getDb();
-  db.prepare('DELETE FROM transcriptions WHERE id = ?').run(id);
-  return { success: true };
+  try {
+    const db = getDb();
+    db.prepare('DELETE FROM transcriptions WHERE id = ?').run(id);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('db-update-transcription', async (_event, id: string, text: string) => {
-  const db = getDb();
-  db.prepare('UPDATE transcriptions SET text = ? WHERE id = ?').run(text, id);
-  return { success: true };
+  try {
+    const db = getDb();
+    db.prepare('UPDATE transcriptions SET text = ? WHERE id = ?').run(text, id);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('get-app-path', async () => {

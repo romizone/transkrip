@@ -1,7 +1,8 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   selectFile: () => ipcRenderer.invoke('select-file'),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   transcribe: (options: any) => ipcRenderer.invoke('transcribe', options),
   checkModel: (model: string) => ipcRenderer.invoke('check-model', model),
   downloadModel: (model: string) => ipcRenderer.invoke('download-model', model),

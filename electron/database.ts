@@ -3,7 +3,7 @@ import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
-let db: Database.Database;
+let db: Database.Database | null = null;
 
 export function initDatabase() {
   const dbDir = path.join(app.getPath('userData'), 'data');
@@ -12,6 +12,8 @@ export function initDatabase() {
   }
 
   db = new Database(path.join(dbDir, 'transkrip.db'));
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS transcriptions (
@@ -24,12 +26,15 @@ export function initDatabase() {
       text TEXT DEFAULT '',
       segments TEXT DEFAULT '[]',
       created_at TEXT DEFAULT (datetime('now'))
-    )
+    );
+    CREATE INDEX IF NOT EXISTS idx_transcriptions_created_at
+      ON transcriptions(created_at DESC);
   `);
 
   return db;
 }
 
-export function getDb() {
+export function getDb(): Database.Database {
+  if (!db) throw new Error('Database not initialized');
   return db;
 }

@@ -56,8 +56,16 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
+      const filePath =
+        (window.electronAPI?.getPathForFile?.(droppedFile)) ||
+        (droppedFile as any).path ||
+        '';
+      if (!filePath) {
+        setError('Could not read file path from drop. Please use the file picker instead.');
+        return;
+      }
       setFile({
-        path: (droppedFile as any).path || '',
+        path: filePath,
         name: droppedFile.name,
         size: droppedFile.size,
       });
@@ -150,7 +158,7 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
             <p className="text-white font-medium text-lg">Drop your file here</p>
             <p className="text-slate-400 text-sm mt-1">or click to browse</p>
             <p className="text-slate-600 text-xs mt-3">
-              Supports MP3, MP4, WAV, OGG, M4A, WEBM, FLAC, AAC
+              Supports MP3, MP4, WAV, OGG, M4A, WEBM, FLAC, AAC, MOV, MKV, AVI
             </p>
           </div>
         )}

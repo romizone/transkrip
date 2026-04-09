@@ -25,6 +25,7 @@ export interface TranscriptionProgress {
 
 export interface ElectronAPI {
   selectFile: () => Promise<{ path: string; name: string; size: number } | null>;
+  getPathForFile: (file: File) => string;
   transcribe: (options: {
     filePath: string;
     language: string;

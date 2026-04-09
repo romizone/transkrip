@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { execFile, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import https from 'https';
 import http from 'http';
 
@@ -14,23 +14,44 @@ const MODEL_URLS: Record<string, string> = {
   'medium': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
 };
 
+const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
+
 export function getModelPath(modelName: string): string {
   return path.join(MODELS_DIR(), `ggml-${modelName}.bin`);
 }
 
-function followRedirects(url: string, dest: string): Promise<void> {
+function safeUnlink(p: string) {
+  try {
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch {
+    /* ignore */
+  }
+}
+
+function followRedirects(url: string, dest: string, depth = 0): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (depth > 10) {
+      reject(new Error('Too many redirects'));
+      return;
+    }
     const protocol = url.startsWith('https') ? https : http;
-    protocol.get(url, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
+    const req = protocol.get(url, (response) => {
+      if (response.statusCode && REDIRECT_CODES.has(response.statusCode)) {
         const redirectUrl = response.headers.location;
+        response.resume();
         if (redirectUrl) {
-          followRedirects(redirectUrl, dest).then(resolve).catch(reject);
+          const nextUrl = redirectUrl.startsWith('http')
+            ? redirectUrl
+            : new URL(redirectUrl, url).toString();
+          followRedirects(nextUrl, dest, depth + 1).then(resolve).catch(reject);
           return;
         }
+        reject(new Error('Redirect without Location header'));
+        return;
       }
 
       if (response.statusCode !== 200) {
+        response.resume();
         reject(new Error(`Download failed with status ${response.statusCode}`));
         return;
       }
@@ -38,14 +59,21 @@ function followRedirects(url: string, dest: string): Promise<void> {
       const file = fs.createWriteStream(dest);
       response.pipe(file);
       file.on('finish', () => {
-        file.close();
-        resolve();
+        file.close((err) => (err ? reject(err) : resolve()));
       });
       file.on('error', (err) => {
-        fs.unlinkSync(dest);
+        safeUnlink(dest);
         reject(err);
       });
-    }).on('error', reject);
+      response.on('error', (err) => {
+        safeUnlink(dest);
+        reject(err);
+      });
+    });
+    req.on('error', (err) => {
+      safeUnlink(dest);
+      reject(err);
+    });
   });
 }
 
@@ -61,7 +89,14 @@ export async function downloadModel(modelName: string): Promise<string> {
   const url = MODEL_URLS[modelName];
   if (!url) throw new Error(`Unknown model: ${modelName}`);
 
-  await followRedirects(url, modelPath);
+  const tmpPath = `${modelPath}.part`;
+  try {
+    await followRedirects(url, tmpPath);
+    fs.renameSync(tmpPath, modelPath);
+  } catch (err) {
+    safeUnlink(tmpPath);
+    throw err;
+  }
   return modelPath;
 }
 
@@ -86,7 +121,6 @@ export interface TranscribeResult {
 }
 
 function getWhisperBinaryPath(): string {
-  // Check common install locations
   const possiblePaths = [
     '/opt/homebrew/bin/whisper-cli',
     '/opt/homebrew/bin/whisper-cpp',
@@ -101,7 +135,6 @@ function getWhisperBinaryPath(): string {
     if (fs.existsSync(p)) return p;
   }
 
-  // Try to find via which
   return 'whisper-cli';
 }
 
@@ -117,9 +150,12 @@ function convertToWav(inputPath: string): Promise<string> {
       outputPath,
     ]);
 
+    let stderr = '';
+    ffmpeg.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+
     ffmpeg.on('close', (code) => {
       if (code === 0) resolve(outputPath);
-      else reject(new Error(`ffmpeg exited with code ${code}. Make sure ffmpeg is installed (brew install ffmpeg).`));
+      else reject(new Error(`ffmpeg exited with code ${code}. Make sure ffmpeg is installed (brew install ffmpeg).\n${stderr}`));
     });
 
     ffmpeg.on('error', () => {
@@ -129,9 +165,8 @@ function convertToWav(inputPath: string): Promise<string> {
 }
 
 export async function transcribeAudio(options: TranscribeOptions): Promise<TranscribeResult> {
-  const { filePath, language, modelName, timestamps, onProgress } = options;
+  const { filePath, language, modelName, onProgress } = options;
 
-  // Convert to WAV 16kHz mono
   onProgress?.(5);
   const wavPath = await convertToWav(filePath);
   onProgress?.(15);
@@ -139,11 +174,16 @@ export async function transcribeAudio(options: TranscribeOptions): Promise<Trans
   const modelPath = getModelPath(modelName);
   const whisperBin = getWhisperBinaryPath();
 
+  // whisper.cpp writes output to `<output-file>.json` when --output-json is set.
+  // Use a clean basename without the .wav extension.
+  const outputBase = wavPath.replace(/\.wav$/, '');
+  const outputJsonPath = `${outputBase}.json`;
+
   const args = [
     '-m', modelPath,
     '-f', wavPath,
     '--output-json',
-    '--no-prints',
+    '--output-file', outputBase,
   ];
 
   if (language && language !== 'auto') {
@@ -153,30 +193,40 @@ export async function transcribeAudio(options: TranscribeOptions): Promise<Trans
   return new Promise((resolve, reject) => {
     onProgress?.(20);
 
-    const outputJsonPath = wavPath + '.json';
-    args.push('--output-file', wavPath);
-
     const proc = spawn(whisperBin, args);
-
     let stderr = '';
+    let cleanedWav = false;
+    const cleanupWav = () => {
+      if (!cleanedWav) {
+        cleanedWav = true;
+        safeUnlink(wavPath);
+      }
+    };
 
-    proc.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString();
-      // Try to parse progress from whisper output
-      const match = data.toString().match(/progress\s*=\s*(\d+)%/);
+    const parseProgress = (chunk: string) => {
+      // whisper.cpp prints `progress = NN%` to stderr
+      const match = chunk.match(/progress\s*=\s*(\d+)\s*%/);
       if (match) {
         const p = parseInt(match[1], 10);
-        onProgress?.(20 + p * 0.75);
+        onProgress?.(Math.min(95, 20 + p * 0.75));
       }
+    };
+
+    proc.stderr.on('data', (data: Buffer) => {
+      const s = data.toString();
+      stderr += s;
+      parseProgress(s);
+    });
+
+    proc.stdout.on('data', (data: Buffer) => {
+      parseProgress(data.toString());
     });
 
     proc.on('close', (code) => {
-      // Clean up temp wav
-      try { fs.unlinkSync(wavPath); } catch {}
+      cleanupWav();
 
       if (code !== 0) {
-        // Cleanup
-        try { fs.unlinkSync(outputJsonPath); } catch {}
+        safeUnlink(outputJsonPath);
         reject(new Error(`Whisper exited with code ${code}. ${stderr}\n\nMake sure whisper.cpp is installed: brew install whisper-cpp`));
         return;
       }
@@ -184,28 +234,29 @@ export async function transcribeAudio(options: TranscribeOptions): Promise<Trans
       try {
         const jsonContent = fs.readFileSync(outputJsonPath, 'utf-8');
         const json = JSON.parse(jsonContent);
-        fs.unlinkSync(outputJsonPath);
+        safeUnlink(outputJsonPath);
 
-        const segments: Segment[] = (json.transcription || []).map((seg: any) => ({
-          start: seg.offsets?.from ? seg.offsets.from / 1000 : 0,
-          end: seg.offsets?.to ? seg.offsets.to / 1000 : 0,
-          text: seg.text?.trim() || '',
-        }));
+        const segments: Segment[] = (json.transcription || [])
+          .map((seg: any) => ({
+            start: seg.offsets?.from ? seg.offsets.from / 1000 : 0,
+            end: seg.offsets?.to ? seg.offsets.to / 1000 : 0,
+            text: seg.text?.trim() || '',
+          }))
+          .filter((s: Segment) => s.text.length > 0);
 
-        const fullText = segments.map(s => s.text).join(' ');
+        const fullText = segments.map((s) => s.text).join(' ');
         const duration = segments.length > 0 ? segments[segments.length - 1].end : 0;
 
         onProgress?.(100);
         resolve({ text: fullText, segments, duration });
       } catch (parseError: any) {
-        // Fallback: try reading text output
-        try { fs.unlinkSync(outputJsonPath); } catch {}
+        safeUnlink(outputJsonPath);
         reject(new Error(`Failed to parse whisper output: ${parseError.message}`));
       }
     });
 
     proc.on('error', () => {
-      try { fs.unlinkSync(wavPath); } catch {}
+      cleanupWav();
       reject(new Error('whisper-cpp not found. Install it with: brew install whisper-cpp'));
     });
   });
