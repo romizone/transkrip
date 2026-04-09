@@ -101,29 +101,29 @@
 
 ## 📥 Installation Guide
 
-Transkrip membutuhkan dua komponen: **(1) aplikasi desktop-nya** dan **(2) dependency sistem** (`ffmpeg` + `whisper.cpp`). Tanpa dependency sistem, aplikasi akan tetap terbuka tapi tidak bisa melakukan transkripsi.
+Transkrip requires two components: **(1) the desktop app itself** and **(2) system dependencies** (`ffmpeg` + `whisper.cpp`). Without the system dependencies, the app will still open but won't be able to perform transcription.
 
-### 🔧 Step 0 — Install System Dependencies (Wajib)
+### 🔧 Step 0 — Install System Dependencies (Required)
 
-Semua metode instalasi membutuhkan ini. Buka **Terminal** dan jalankan:
+All installation methods require this. Open **Terminal** and run:
 
 #### macOS (Homebrew)
 
 ```bash
-# Install Homebrew dulu kalau belum ada:
+# Install Homebrew first if you don't have it:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-# Install ffmpeg (untuk konversi audio/video)
+# Install ffmpeg (for audio/video conversion)
 brew install ffmpeg
 
-# Install whisper.cpp (engine transkripsi AI)
+# Install whisper.cpp (the AI transcription engine)
 brew install whisper-cpp
 ```
 
-Verifikasi instalasi:
+Verify the installation:
 ```bash
-ffmpeg -version        # harus menampilkan versi
-whisper-cli --help     # harus menampilkan help menu
+ffmpeg -version        # should print a version
+whisper-cli --help     # should print the help menu
 ```
 
 #### Linux (Ubuntu/Debian)
@@ -132,56 +132,56 @@ whisper-cli --help     # harus menampilkan help menu
 sudo apt update
 sudo apt install -y ffmpeg build-essential cmake git
 
-# Build whisper.cpp dari source
+# Build whisper.cpp from source
 git clone https://github.com/ggerganov/whisper.cpp.git
 cd whisper.cpp && make && sudo cp main /usr/local/bin/whisper-cli
 ```
 
 #### Windows
 
-1. Install [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) → extract → tambahkan `bin/` ke PATH
-2. Download [whisper.cpp Windows build](https://github.com/ggerganov/whisper.cpp/releases) → letakkan di PATH
+1. Install [ffmpeg](https://www.gyan.dev/ffmpeg/builds/) → extract → add the `bin/` folder to PATH
+2. Download a [whisper.cpp Windows build](https://github.com/ggerganov/whisper.cpp/releases) → place it on PATH
 
 ---
 
-### 🅰️ Metode A — Install dari File DMG (Recommended untuk macOS)
+### 🅰️ Method A — Install from the DMG (Recommended for macOS)
 
-Paling mudah. Cocok untuk end-user yang tidak mau compile.
+The easiest route. Best for end users who don't want to compile anything.
 
-#### Langkah 1 — Download
+#### Step 1 — Download
 
-Buka halaman Release di GitHub:
+Open the latest release page on GitHub:
 
 👉 **https://github.com/romizone/transkrip/releases/latest**
 
-Download file:
+Download:
 - 🍎 **macOS Apple Silicon (M1/M2/M3/M4):** `Transkrip-1.0.0-arm64.dmg`
 
-#### Langkah 2 — Install via Finder (Cara GUI)
+#### Step 2 — Install via Finder (GUI)
 
-1. **Double-click** file `Transkrip-1.0.0-arm64.dmg` di folder Downloads
-2. Jendela DMG akan terbuka — **drag icon Transkrip** ke folder `Applications`
-3. Tunggu proses copy selesai
-4. **Eject DMG**: klik kanan icon DMG di Finder sidebar → Eject
+1. **Double-click** `Transkrip-1.0.0-arm64.dmg` in your Downloads folder
+2. The DMG window opens — **drag the Transkrip icon** into the `Applications` folder
+3. Wait for the copy to finish
+4. **Eject the DMG**: right-click the DMG in the Finder sidebar → Eject
 
-#### Langkah 3 — Bypass Gatekeeper (WAJIB)
+#### Step 3 — Bypass Gatekeeper (REQUIRED)
 
-> ⚠️ Saat pertama dibuka, macOS akan menampilkan error **"Transkrip is damaged and can't be opened"**. Ini BUKAN bug. Penyebabnya: DMG di-distribute unsigned (tanpa Apple Developer ID $99/tahun). Solusinya gampang.
+> ⚠️ On first launch, macOS will show **"Transkrip is damaged and can't be opened"**. This is NOT a bug. The DMG is distributed unsigned (no $99/year Apple Developer ID). The fix is trivial.
 
-Buka **Terminal** (`Cmd+Space` → ketik "Terminal") dan jalankan:
+Open **Terminal** (`Cmd+Space` → type "Terminal") and run:
 
 ```bash
 xattr -cr /Applications/Transkrip.app
 ```
 
-Selesai. Sekarang buka Transkrip dari Launchpad atau Applications folder — akan berjalan normal.
+That's it. Now open Transkrip from Launchpad or the Applications folder — it will run normally.
 
-#### Langkah 3 (Alternatif) — Install via Terminal (Lebih Cepat)
+#### Step 3 (Alternative) — Install via Terminal (Faster)
 
-Kalau kamu nyaman dengan Terminal, satu blok command ini menggantikan semua langkah di atas:
+If you're comfortable with Terminal, a single command block replaces all the GUI steps above:
 
 ```bash
-# Mount DMG, copy ke Applications, bypass Gatekeeper, unmount, lalu buka
+# Mount DMG, copy to Applications, bypass Gatekeeper, unmount, then launch
 hdiutil attach ~/Downloads/Transkrip-1.0.0-arm64.dmg && \
 cp -R "/Volumes/Transkrip 1.0.0-arm64/Transkrip.app" /Applications/ && \
 xattr -cr /Applications/Transkrip.app && \
@@ -189,156 +189,156 @@ hdiutil detach "/Volumes/Transkrip 1.0.0-arm64" && \
 open /Applications/Transkrip.app
 ```
 
-Copy-paste seluruh blok ke Terminal → tekan Enter → aplikasi langsung terbuka. ✨
+Paste the whole block into Terminal → press Enter → the app launches. ✨
 
 ---
 
-### 🅱️ Metode B — Compile dari Source Code (Developer)
+### 🅱️ Method B — Build from Source (Developers)
 
-Cocok untuk developer yang ingin modifikasi kode atau build untuk platform selain macOS ARM64.
+For developers who want to modify the code or build for platforms other than macOS ARM64.
 
-#### Prasyarat
+#### Prerequisites
 
 - **Node.js** ≥ 18 ([download](https://nodejs.org/))
-- **npm** ≥ 9 (bundled dengan Node.js)
+- **npm** ≥ 9 (bundled with Node.js)
 - **Git**
-- System dependencies dari **Step 0** di atas
+- System dependencies from **Step 0** above
 
-#### Langkah 1 — Clone Repository
+#### Step 1 — Clone the Repository
 
 ```bash
 git clone https://github.com/romizone/transkrip.git
 cd transkrip
 ```
 
-#### Langkah 2 — Install Node Dependencies
+#### Step 2 — Install Node Dependencies
 
 ```bash
 npm install
 ```
 
-Proses ini akan:
-- Download semua library (Electron, React, dll)
-- Compile `better-sqlite3` native module untuk Electron (via postinstall)
-- Butuh 1–3 menit tergantung koneksi
+This will:
+- Download all libraries (Electron, React, etc.)
+- Compile the `better-sqlite3` native module for Electron (via postinstall)
+- Take 1–3 minutes depending on your connection
 
-#### Langkah 3a — Jalankan dalam Mode Development
+#### Step 3a — Run in Development Mode
 
-Untuk testing / development dengan hot-reload:
+For testing / development with hot-reload:
 
 ```bash
 npm run dev
 ```
 
-Ini akan:
-1. Compile TypeScript Electron main process
-2. Start Vite dev server di `http://localhost:5173`
-3. Launch Electron window yang menampilkan React app
+This will:
+1. Compile the TypeScript Electron main process
+2. Start the Vite dev server at `http://localhost:5173`
+3. Launch an Electron window hosting the React app
 
-Tutup app untuk stop dev server.
+Close the window to stop the dev server.
 
-#### Langkah 3b — Build Installer DMG/EXE/AppImage
+#### Step 3b — Build Installer (DMG / EXE / AppImage)
 
-Untuk menghasilkan installer yang bisa di-distribute:
+To produce a distributable installer:
 
 ```bash
 npm run dist
 ```
 
-Hasil build ada di folder `release/`:
+Output lands in the `release/` folder:
 - 🍎 **macOS:** `release/Transkrip-1.0.0-arm64.dmg`
-- 🪟 **Windows:** `release/Transkrip Setup 1.0.0.exe` (jalankan di Windows)
-- 🐧 **Linux:** `release/Transkrip-1.0.0.AppImage` (jalankan di Linux)
+- 🪟 **Windows:** `release/Transkrip Setup 1.0.0.exe` (build on Windows)
+- 🐧 **Linux:** `release/Transkrip-1.0.0.AppImage` (build on Linux)
 
-> 💡 Build hanya bisa menghasilkan installer untuk OS tempat kamu build. Untuk build macOS DMG, kamu harus build di Mac.
+> 💡 You can only build an installer for the OS you're building on. To build a macOS DMG, you must build on a Mac.
 
-Setelah `npm run dist` selesai, install DMG-nya mengikuti **Metode A — Langkah 2 & 3** di atas.
+After `npm run dist` finishes, install the DMG using **Method A — Steps 2 & 3** above.
 
 ---
 
-## 🎯 Cara Menggunakan Aplikasi
+## 🎯 How to Use the App
 
-### 1️⃣ Pertama Kali Buka
+### 1️⃣ First Launch
 
-Saat pertama kali dibuka, Transkrip akan:
-- Membuat database lokal di `~/Library/Application Support/Transkrip/` (macOS)
-- Menampilkan halaman **Upload** sebagai default
+On first launch, Transkrip will:
+- Create a local database at `~/Library/Application Support/Transkrip/` (macOS)
+- Show the **Upload** page as the default view
 
-### 2️⃣ Transkripsi File Pertama
+### 2️⃣ Transcribe Your First File
 
-#### Langkah demi langkah:
+#### Step by step:
 
-1. **Pilih file audio/video** — dua cara:
-   - Klik area drop zone → file picker terbuka → pilih file
-   - Drag file langsung dari Finder/Explorer ke drop zone
+1. **Select an audio/video file** — two ways:
+   - Click the drop zone → the file picker opens → choose a file
+   - Drag a file directly from Finder/Explorer into the drop zone
 
-   Format yang didukung: `MP3, MP4, WAV, OGG, M4A, WEBM, FLAC, AAC, MOV, MKV, AVI, WMV, OPUS, WMA`
+   Supported formats: `MP3, MP4, WAV, OGG, M4A, WEBM, FLAC, AAC, MOV, MKV, AVI, WMV, OPUS, WMA`
 
-2. **Pilih bahasa** di dropdown **Language**:
-   - `Auto Detect` — Whisper akan deteksi otomatis (recommended)
-   - Atau pilih manual: Indonesian, English, Japanese, dll (15 bahasa tersedia)
+2. **Pick a language** in the **Language** dropdown:
+   - `Auto Detect` — let Whisper figure it out (recommended)
+   - Or pick manually: Indonesian, English, Japanese, etc. (15 languages available)
 
-3. **Pilih model AI** di dropdown **Model**:
+3. **Pick an AI model** in the **Model** dropdown:
 
-   | Model | Ukuran | Kecepatan | Akurasi |
+   | Model | Size | Speed | Accuracy |
    |---|---|---|---|
    | **Tiny** | ~75 MB | ⚡⚡⚡⚡⚡ | ⭐⭐ |
    | **Base** | ~142 MB | ⚡⚡⚡⚡ | ⭐⭐⭐ (default) |
    | **Small** | ~466 MB | ⚡⚡⚡ | ⭐⭐⭐⭐ |
    | **Medium** | ~1.5 GB | ⚡⚡ | ⭐⭐⭐⭐⭐ |
 
-   > 📥 Model akan **otomatis di-download** saat pertama kali digunakan. Download sekali, simpan di `~/Library/Application Support/Transkrip/models/`. Tidak perlu download ulang.
+   > 📥 Models are **downloaded automatically** the first time you use them, then cached at `~/Library/Application Support/Transkrip/models/`. You only pay the download cost once.
 
-4. **(Opsional) Centang "Include timestamps"** — menambahkan waktu `[00:12]` di setiap segmen teks.
+4. **(Optional) Check "Include timestamps"** — adds `[00:12]` style markers to each segment.
 
-5. Klik **Start Transcription**.
+5. Click **Start Transcription**.
 
-6. Tunggu proses:
-   - **Downloading model** (hanya saat pertama pakai model tertentu)
-   - **Transcribing** — progress bar akan update secara real-time
-   - Durasi transkripsi tergantung panjang audio & model yang dipilih. Rule of thumb: Base model ≈ 0.3× durasi audio di Apple Silicon.
+6. Wait for:
+   - **Downloading model** (only on first use of a given model)
+   - **Transcribing** — the progress bar updates in real time
+   - Duration depends on audio length and chosen model. Rule of thumb: the Base model runs at ~0.3× audio duration on Apple Silicon.
 
-### 3️⃣ Lihat & Edit Hasil Transkripsi
+### 3️⃣ View & Edit the Result
 
-Setelah selesai, kamu otomatis di-redirect ke halaman **Transcription View** yang menampilkan:
-- Teks lengkap dengan timestamp (kalau dicentang)
-- Tombol Export (TXT, DOCX, PDF, SRT)
-- Tombol Edit
+When transcription finishes, you're redirected to the **Transcription View** page which shows:
+- The full text with timestamps (if enabled)
+- Export buttons (TXT, DOCX, PDF, SRT)
+- An Edit button
 
-### 4️⃣ Export Hasil
+### 4️⃣ Export the Result
 
-Klik tombol export sesuai format yang diinginkan:
+Click the export button for the format you want:
 
-| Format | Untuk apa |
+| Format | Use case |
 |---|---|
-| 📄 **TXT** | Plain text, cocok untuk copy-paste |
-| 📝 **DOCX** | Word document, untuk editing lebih lanjut |
-| 📕 **PDF** | Dokumen final, siap cetak / share |
-| 🎬 **SRT** | Subtitle file, untuk video editing |
+| 📄 **TXT** | Plain text — easy to copy-paste |
+| 📝 **DOCX** | Word document — for further editing |
+| 📕 **PDF** | Finished document — ready to print or share |
+| 🎬 **SRT** | Subtitle file — for video editing |
 
-File akan di-download ke folder Downloads default OS-mu.
+The file is saved to your OS's default Downloads folder.
 
-### 5️⃣ Kelola Riwayat
+### 5️⃣ Manage History
 
-Klik **History** di sidebar kiri untuk melihat semua transkripsi sebelumnya. Dari sini kamu bisa:
-- 👁️ **View** — buka kembali hasil lama
-- 🗑️ **Delete** — hapus dari database lokal
+Click **History** in the left sidebar to see all previous transcriptions. From there you can:
+- 👁️ **View** — reopen an old result
+- 🗑️ **Delete** — remove it from the local database
 
-Semua data tersimpan lokal — tidak pernah dikirim ke server manapun.
+All data stays on your device — nothing is ever sent to a server.
 
 ---
 
 ## 🧯 Troubleshooting
 
-| Masalah | Penyebab | Solusi |
+| Issue | Cause | Fix |
 |---|---|---|
 | `"Transkrip" is damaged and can't be opened` | Gatekeeper quarantine | `xattr -cr /Applications/Transkrip.app` |
-| `whisper-cpp not found` | Belum install whisper.cpp | `brew install whisper-cpp` |
-| `ffmpeg not found` | Belum install ffmpeg | `brew install ffmpeg` |
-| Transkripsi sangat lambat | Model terlalu besar | Ganti ke Base atau Small |
-| Model download gagal | Koneksi internet lambat | Retry — model re-download atomic, tidak korup |
-| Drag & drop tidak bekerja | Electron 32+ webUtils issue | Gunakan file picker (klik drop zone) |
-| Teks hasil jelek | Model terlalu kecil / bahasa salah | Pakai Medium + pilih bahasa manual |
+| `whisper-cpp not found` | whisper.cpp not installed | `brew install whisper-cpp` |
+| `ffmpeg not found` | ffmpeg not installed | `brew install ffmpeg` |
+| Transcription is very slow | Model too large | Switch to Base or Small |
+| Model download fails | Slow or unstable connection | Retry — downloads are atomic and won't corrupt |
+| Drag & drop doesn't work | Electron 32+ webUtils issue | Use the file picker (click the drop zone) |
+| Poor transcription quality | Model too small / wrong language | Use Medium + pick the language manually |
 
 ---
 
