@@ -184,11 +184,10 @@ export async function transcribeAudio(options: TranscribeOptions): Promise<Trans
     '-f', wavPath,
     '--output-json',
     '--output-file', outputBase,
+    // Always pass -l explicitly. whisper.cpp defaults to "en" when omitted,
+    // so auto-detect requires "-l auto".
+    '-l', language && language.length > 0 ? language : 'auto',
   ];
-
-  if (language && language !== 'auto') {
-    args.push('-l', language);
-  }
 
   return new Promise((resolve, reject) => {
     onProgress?.(20);
