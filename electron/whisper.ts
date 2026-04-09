@@ -28,7 +28,14 @@ function safeUnlink(p: string) {
   }
 }
 
-function followRedirects(url: string, dest: string, depth = 0): Promise<void> {
+type DownloadProgress = (received: number, total: number) => void;
+
+function followRedirects(
+  url: string,
+  dest: string,
+  onProgress?: DownloadProgress,
+  depth = 0
+): Promise<void> {
   return new Promise((resolve, reject) => {
     if (depth > 10) {
       reject(new Error('Too many redirects'));
@@ -43,7 +50,7 @@ function followRedirects(url: string, dest: string, depth = 0): Promise<void> {
           const nextUrl = redirectUrl.startsWith('http')
             ? redirectUrl
             : new URL(redirectUrl, url).toString();
-          followRedirects(nextUrl, dest, depth + 1).then(resolve).catch(reject);
+          followRedirects(nextUrl, dest, onProgress, depth + 1).then(resolve).catch(reject);
           return;
         }
         reject(new Error('Redirect without Location header'));
@@ -55,6 +62,13 @@ function followRedirects(url: string, dest: string, depth = 0): Promise<void> {
         reject(new Error(`Download failed with status ${response.statusCode}`));
         return;
       }
+
+      const total = parseInt(response.headers['content-length'] || '0', 10);
+      let received = 0;
+      response.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+        onProgress?.(received, total);
+      });
 
       const file = fs.createWriteStream(dest);
       response.pipe(file);
@@ -77,7 +91,10 @@ function followRedirects(url: string, dest: string, depth = 0): Promise<void> {
   });
 }
 
-export async function downloadModel(modelName: string): Promise<string> {
+export async function downloadModel(
+  modelName: string,
+  onProgress?: DownloadProgress
+): Promise<string> {
   const modelsDir = MODELS_DIR();
   if (!fs.existsSync(modelsDir)) {
     fs.mkdirSync(modelsDir, { recursive: true });
@@ -91,7 +108,7 @@ export async function downloadModel(modelName: string): Promise<string> {
 
   const tmpPath = `${modelPath}.part`;
   try {
-    await followRedirects(url, tmpPath);
+    await followRedirects(url, tmpPath, onProgress);
     fs.renameSync(tmpPath, modelPath);
   } catch (err) {
     safeUnlink(tmpPath);

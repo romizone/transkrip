@@ -70,8 +70,27 @@ ipcMain.handle('transcribe', async (event, options: {
   try {
     const modelPath = getModelPath(options.model);
     if (!fs.existsSync(modelPath)) {
-      mainWindow?.webContents.send('transcription-progress', { status: 'downloading-model', model: options.model });
-      await downloadModel(options.model);
+      mainWindow?.webContents.send('transcription-progress', { status: 'downloading-model', model: options.model, progress: 0 });
+      let lastSent = 0;
+      await downloadModel(options.model, (received, total) => {
+        const percent = total > 0 ? (received / total) * 100 : 0;
+        const now = Date.now();
+        if (now - lastSent > 150 || (total > 0 && received === total)) {
+          lastSent = now;
+          mainWindow?.webContents.send('transcription-progress', {
+            status: 'downloading-model',
+            model: options.model,
+            progress: percent,
+          });
+          mainWindow?.webContents.send('model-download-progress', {
+            model: options.model,
+            status: 'downloading',
+            received,
+            total,
+            percent,
+          });
+        }
+      });
     }
 
     mainWindow?.webContents.send('transcription-progress', { status: 'transcribing', progress: 0 });
@@ -100,11 +119,27 @@ ipcMain.handle('check-model', async (_event, modelName: string) => {
 
 ipcMain.handle('download-model', async (_event, modelName: string) => {
   try {
-    mainWindow?.webContents.send('model-download-progress', { model: modelName, status: 'downloading' });
-    await downloadModel(modelName);
-    mainWindow?.webContents.send('model-download-progress', { model: modelName, status: 'done' });
+    mainWindow?.webContents.send('model-download-progress', { model: modelName, status: 'downloading', received: 0, total: 0, percent: 0 });
+    let lastSent = 0;
+    await downloadModel(modelName, (received, total) => {
+      const percent = total > 0 ? (received / total) * 100 : 0;
+      // Throttle to avoid flooding IPC
+      const now = Date.now();
+      if (now - lastSent > 150 || (total > 0 && received === total)) {
+        lastSent = now;
+        mainWindow?.webContents.send('model-download-progress', {
+          model: modelName,
+          status: 'downloading',
+          received,
+          total,
+          percent,
+        });
+      }
+    });
+    mainWindow?.webContents.send('model-download-progress', { model: modelName, status: 'done', percent: 100 });
     return { success: true };
   } catch (error: any) {
+    mainWindow?.webContents.send('model-download-progress', { model: modelName, status: 'error', error: error.message });
     return { success: false, error: error.message };
   }
 });

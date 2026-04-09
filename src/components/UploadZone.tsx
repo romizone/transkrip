@@ -39,6 +39,12 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<Record<string, boolean>>({});
+  const [downloadState, setDownloadState] = useState<{
+    model: string;
+    percent: number;
+    received: number;
+    total: number;
+  } | null>(null);
 
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
   const isProcessing = progress.status === 'transcribing' || progress.status === 'downloading-model';
@@ -54,6 +60,27 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
   useEffect(() => {
     refreshModelStatus();
   }, [refreshModelStatus]);
+
+  useEffect(() => {
+    if (!isElectron) return;
+    const unsub = window.electronAPI.onModelDownloadProgress((data) => {
+      if (data.status === 'downloading') {
+        setDownloadState({
+          model: data.model,
+          percent: data.percent ?? 0,
+          received: data.received ?? 0,
+          total: data.total ?? 0,
+        });
+      } else if (data.status === 'done') {
+        setDownloadState(null);
+        refreshModelStatus();
+      } else if (data.status === 'error') {
+        setDownloadState(null);
+        setError(data.error || 'Download failed');
+      }
+    });
+    return unsub;
+  }, [isElectron, refreshModelStatus]);
 
   useEffect(() => {
     // Refresh after a successful download/transcription
@@ -226,14 +253,41 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
               );
             })}
           </select>
-          <div className="mt-2 flex items-center justify-between text-xs">
-            {modelStatus[model] === true ? (
+          <div className="mt-2 text-xs">
+            {downloadState && downloadState.model === model ? (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-indigo-400 flex items-center gap-1">
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Downloading…
+                  </span>
+                  <span className="text-indigo-400 font-mono">
+                    {downloadState.percent.toFixed(1)}%
+                    {downloadState.total > 0 && (
+                      <span className="text-slate-500 ml-2">
+                        {(downloadState.received / 1024 / 1024).toFixed(1)} /{' '}
+                        {(downloadState.total / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-150"
+                    style={{ width: `${downloadState.percent}%` }}
+                  />
+                </div>
+              </div>
+            ) : modelStatus[model] === true ? (
               <span className="text-emerald-400 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 Model ready on your device
               </span>
             ) : modelStatus[model] === false ? (
-              <>
+              <div className="flex items-center justify-between">
                 <span className="text-amber-400 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   Not downloaded yet
@@ -246,7 +300,7 @@ export default function UploadZone({ progress, onComplete }: UploadZoneProps) {
                 >
                   Download now
                 </button>
-              </>
+              </div>
             ) : (
               <span className="text-slate-500">Checking…</span>
             )}
